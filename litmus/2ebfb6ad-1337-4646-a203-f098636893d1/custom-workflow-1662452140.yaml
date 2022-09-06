@@ -1,0 +1,462 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: e40bb87d-7d75-49ee-9afd-7f11e8f4181a
+    subject: custom-workflow-1662452140_litmus
+    workflow_id: 1890bc33-0248-41c4-9f79-afd49cf61554
+    workflows.argoproj.io/controller-instanceid: e40bb87d-7d75-49ee-9afd-7f11e8f4181a
+  name: custom-workflow-1662452140
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: TARGET_NODE
+      value: gke-gke-hxwa-p-europ-gke-hxwa-p-node--ff318b48-3sue
+    - name: APP_NAMESPACE
+      value: prod-hwa
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=prod-hwa
+    - name: adminModeNamespace
+      value: litmus
+  entrypoint: custom-chaos
+  nodeSelector:
+    noproduct: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: start-ssh-bridge
+        template: start-ssh-bridge
+    - - arguments:
+          parameters:
+          - name: ssh-internal-ip
+            value: '{{steps.start-ssh-bridge.outputs.parameters.ssh-bridge-pod-ip}}'
+        name: node-restart
+        template: node-restart
+      - arguments: {}
+        name: node-restart-placeholder
+        template: node-restart-placeholder
+  - inputs:
+      artifacts:
+      - name: node-restart
+        path: /tmp/node-restart.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Restart node
+            kind: ChaosExperiment
+            metadata:
+              name: node-restart
+              labels:
+                name: node-restart
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.9.0
+            spec:
+              definition:
+                scope: Cluster
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                      - secrets
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - nodes
+                    verbs:
+                      - get
+                      - list
+                image: litmuschaos/go-runner:2.9.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name node-restart
+                command:
+                  - /bin/bash
+                env:
+                  - name: SSH_USER
+                    value: root
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: LIB_IMAGE
+                    value: litmuschaos/go-runner:2.9.0
+                  - name: TARGET_NODE
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: TARGET_NODE_IP
+                    value: ""
+                labels:
+                  name: node-restart
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.9.0
+                secrets:
+                  - name: id-rsa
+                    mountPath: /mnt/
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+    script:
+      command:
+      - sh
+      image: litmuschaos/k8s:latest
+      name: ""
+      resources: {}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+      source: |
+        #!/bin/sh
+        set -euxo pipefail
+        kubectl apply -f /tmp/node-restart.yaml -n {{workflow.parameters.adminModeNamespace}}
+  - inputs:
+      artifacts:
+      - name: bridge-pod
+        path: /tmp/ssh-bridge.yaml
+        raw:
+          data: |
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: ssh-bridge
+            spec:
+              hostPID: true
+              nodeSelector:
+                kubernetes.io/hostname: "{{workflow.parameters.TARGET_NODE}}"
+              restartPolicy: Never
+              serviceAccountName: argo-chaos
+              containers:
+                - name: alpine
+                  image: alpine:3.16.0
+                  command:
+                    - sh
+                  args:
+                    - -x
+                    - /opt/startup.sh
+                  securityContext:
+                    privileged: true
+                  ports:
+                    - containerPort: 22
+                  volumeMounts:
+                    - name: ssh-bridge-helpers
+                      subPath: startup.sh
+                      mountPath: /opt/startup.sh
+                    - name: ssh-bridge-helpers
+                      subPath: label_placeholder.sh
+                      mountPath: /opt/label_placeholder.sh
+              volumes:
+                - name: ssh-bridge-helpers
+                  configMap:
+                    name: ssh-bridge-helpers
+      - name: helpers-configmap
+        path: /tmp/helpers-configmap.yaml
+        raw:
+          data: |
+            apiVersion: v1
+            kind: ConfigMap
+            metadata:
+              name: ssh-bridge-helpers
+            data:
+              startup.sh: >
+                #!/bin/sh
+
+                set -euxo pipefail
+
+                apk add --no-cache openssh-server
+
+                apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing kubectl
+
+                sed -i s/root:!/"root:*"/g /etc/shadow
+
+                echo "export KUBERNETES_PORT=${KUBERNETES_PORT}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_SERVICE_PORT=${KUBERNETES_SERVICE_PORT}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_PORT_443_TCP_ADDR=${KUBERNETES_PORT_443_TCP_ADDR}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_PORT_443_TCP_PORT=${KUBERNETES_PORT_443_TCP_PORT}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_PORT_443_TCP_PROTO=${KUBERNETES_PORT_443_TCP_PROTO}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_PORT_443_TCP=${KUBERNETES_PORT_443_TCP}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_SERVICE_PORT_HTTPS=${KUBERNETES_SERVICE_PORT_HTTPS}" >> /opt/kubectl-connect.sh
+
+                echo "export KUBERNETES_SERVICE_HOST=${KUBERNETES_SERVICE_HOST}" >> /opt/kubectl-connect.sh
+
+                ssh-keygen -A
+
+                ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N ""
+
+                kubectl create secret generic -n {{workflow.parameters.adminModeNamespace}} id-rsa \
+                  --from-file=ssh-privatekey=/root/.ssh/id_ed25519 \
+                  --type=kubernetes.io/ssh-auth
+                mv /root/.ssh/id_ed25519.pub /root/.ssh/authorized_keys
+
+                chmod 600 /root/.ssh/authorized_keys
+
+                rm /root/.ssh/id_ed25519
+
+                /usr/sbin/sshd -D
+              label_placeholder.sh: >
+                #!/bin/sh
+
+                set -euxo pipefail
+
+                until (kubectl get pod -n {{workflow.parameters.APP_NAMESPACE}} -o name | grep pod/node-restart-placeholder); do sleep 1; done
+
+                kubectl label pod -n {{workflow.parameters.APP_NAMESPACE}} node-restart-placeholder {{workflow.parameters.APP_LABEL}}
+
+                until (kubectl get pod -n {{workflow.parameters.APP_NAMESPACE}} -l {{workflow.parameters.APP_LABEL}} -o name | grep pod/node-restart-placeholder); do sleep 1; done
+    metadata: {}
+    name: start-ssh-bridge
+    outputs:
+      parameters:
+      - name: ssh-bridge-pod-ip
+        valueFrom:
+          path: /mnt/out/pod-ip
+    script:
+      command:
+      - sh
+      image: litmuschaos/k8s:latest
+      name: ""
+      resources: {}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+      source: |
+        #!/bin/sh
+        set -euxo pipefail
+        kubectl delete --ignore-not-found --wait=false -n {{workflow.parameters.APP_NAMESPACE}} pod node-restart-placeholder
+        kubectl delete --ignore-not-found --wait=false -n {{workflow.parameters.adminModeNamespace}} pod ssh-bridge
+        kubectl delete --ignore-not-found -n {{workflow.parameters.adminModeNamespace}} configmap ssh-bridge-helpers
+        kubectl delete --ignore-not-found -n {{workflow.parameters.adminModeNamespace}} secret id-rsa
+        cat /tmp/helpers-configmap.yaml
+        kubectl apply -f /tmp/helpers-configmap.yaml -n {{workflow.parameters.adminModeNamespace}}
+        cat /tmp/ssh-bridge.yaml
+        kubectl apply -f /tmp/ssh-bridge.yaml -n {{workflow.parameters.adminModeNamespace}}
+        kubectl wait pods -n {{workflow.parameters.adminModeNamespace}} ssh-bridge --for condition=Ready --timeout=90s
+        kubectl get pod -n {{workflow.parameters.adminModeNamespace}} ssh-bridge -o jsonpath='{.status.podIP}' > /mnt/out/pod-ip
+      volumeMounts:
+      - mountPath: /mnt/out
+        name: out
+    volumes:
+    - emptyDir: {}
+      name: out
+  - inputs:
+      artifacts:
+      - name: node-restart-placeholder
+        path: /tmp/node-restart-placeholder.yaml
+        raw:
+          data: |
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: node-restart-placeholder
+            spec:
+              containers:
+                - name: placeholder
+                  image: alpine:3.16.0
+                  command:
+                    - sleep
+                  args:
+                    - "3600"
+                  startupProbe:
+                    exec:
+                      command:
+                        - "false"
+                    initialDelaySeconds: 0
+                    failureThreshold: 24
+                    periodSeconds: 3600
+              nodeSelector:
+                noproduct: "true"
+              tolerations:
+                - key: noproduct
+                  operator: Equal
+                  value: "true"
+                  effect: NoSchedule
+    metadata: {}
+    name: node-restart-placeholder
+    outputs: {}
+    script:
+      command:
+      - sh
+      image: litmuschaos/k8s:latest
+      name: ""
+      resources: {}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+      source: |
+        #!/bin/sh
+        set -euxo pipefail
+        kubectl apply -f /tmp/node-restart-placeholder.yaml -n {{workflow.parameters.APP_NAMESPACE}}
+        until (kubectl get pod -n {{workflow.parameters.APP_NAMESPACE}} -l {{workflow.parameters.APP_LABEL}} -o name | grep pod/node-restart-placeholder); do sleep 1; done
+        kubectl delete --ignore-not-found -n {{workflow.parameters.adminModeNamespace}} secret id-rsa
+        while kubectl wait pods -n {{workflow.parameters.APP_NAMESPACE}} -l {{workflow.parameters.APP_LABEL}} --field-selector spec.nodeName={{workflow.parameters.TARGET_NODE}} --for condition=Ready --timeout=30s; do sleep 5; done
+        kubectl delete --ignore-not-found --wait=false -n {{workflow.parameters.APP_NAMESPACE}} pod node-restart-placeholder
+        kubectl delete --ignore-not-found --wait=false -n {{workflow.parameters.adminModeNamespace}} pod ssh-bridge
+        kubectl delete --ignore-not-found -n {{workflow.parameters.adminModeNamespace}} configmap ssh-bridge-helpers
+  - container:
+      args:
+      - -file=/tmp/chaosengine-node-restart.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:latest
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-restart
+        path: /tmp/chaosengine-node-restart.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            kind: ChaosEngine
+            metadata:
+              namespace: "{{workflow.parameters.adminModeNamespace}}"
+              generateName: node-restart
+              labels:
+                instance_id: 16ece9d3-7f3e-4d26-af85-5a720ffb62be
+                context: node-restart_litmus
+                workflow_name: custom-workflow-1662452140
+            spec:
+              jobCleanUpPolicy: retain
+              engineState: active
+              annotationCheck: "false"
+              auxiliaryAppInfo: ""
+              chaosServiceAccount: litmus-admin
+              components:
+                runner:
+                  nodeSelector:
+                    noproduct: "true"
+                  tolerations:
+                    - key: noproduct
+                      operator: Equal
+                      value: "true"
+                      effect: NoSchedule
+              experiments:
+                - name: node-restart
+                  spec:
+                    components:
+                      nodeSelector:
+                        noproduct: "true"
+                      tolerations:
+                        - key: noproduct
+                          operator: Equal
+                          value: "true"
+                          effect: NoSchedule
+                      env:
+                        - name: TARGET_NODE
+                          value: "{{workflow.parameters.TARGET_NODE}}"
+                        - name: TARGET_NODE_IP
+                          value: "{{inputs.parameters.ssh-internal-ip}}"
+                        - name: APP_NAMESPACE
+                          value: "{{workflow.parameters.APP_NAMESPACE}}"
+                        - name: APP_LABEL
+                          value: "{{workflow.parameters.APP_LABEL}}"
+                        - name: REBOOT_COMMAND
+                          value: '"source /opt/kubectl-connect.sh && sh /opt/label_placeholder.sh &&
+                            nsenter -t 1 -m -u -i -n reboot 5"'
+                      statusCheckTimeouts:
+                        delay: 2
+                        timeout: 2700
+      parameters:
+      - name: ssh-internal-ip
+    metadata:
+      labels:
+        weight: "10"
+    name: node-restart
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: noproduct
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
