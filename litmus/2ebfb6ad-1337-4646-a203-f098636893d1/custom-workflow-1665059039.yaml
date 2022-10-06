@@ -1,0 +1,306 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: fc9dd685-4b41-43f5-8ee8-1fdd30ccedc5
+    subject: custom-workflow-1665059039_litmus
+    workflow_id: 5e97d2ad-284c-4230-9156-36ca6fec2c93
+    workflows.argoproj.io/controller-instanceid: fc9dd685-4b41-43f5-8ee8-1fdd30ccedc5
+  name: custom-workflow-1665059039
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+  entrypoint: custom-chaos
+  podGC:
+    strategy: OnWorkflowCompletion
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: pod-dns-spoof-bdj
+        template: pod-dns-spoof-bdj
+  - container:
+      args:
+      - kubectl apply -f /tmp/pod-dns-spoof-bdj.yaml -n {{workflow.parameters.adminModeNamespace}}
+        |  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.9.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-dns-spoof-bdj
+        path: /tmp/pod-dns-spoof-bdj.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: >
+                Pod DNS Spoof can spoof particular dns requests in target pod container to
+                desired target hostnames
+            kind: ChaosExperiment
+            metadata:
+              name: pod-dns-spoof
+              labels:
+                name: pod-dns-spoof
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.9.0
+            spec:
+              definition:
+                scope: Namespaced
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - deployments
+                      - statefulsets
+                      - replicasets
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - apps.openshift.io
+                    resources:
+                      - deploymentconfigs
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - replicationcontrollers
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - argoproj.io
+                    resources:
+                      - rollouts
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                image: litmuschaos/go-runner:2.9.0
+                args:
+                  - -c
+                  - ./experiments -name pod-dns-spoof
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_CONTAINER
+                    value: ""
+                  - name: LIB_IMAGE
+                    value: litmuschaos/go-runner:2.9.0
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: PODS_AFFECTED_PERC
+                    value: ""
+                  - name: TARGET_PODS
+                    value: ""
+                  - name: CONTAINER_RUNTIME
+                    value: docker
+                  - name: SOCKET_PATH
+                    value: /var/run/docker.sock
+                  - name: SEQUENCE
+                    value: parallel
+                  - name: SPOOF_MAP
+                    value: ""
+                labels:
+                  experiment: pod-dns-spoof
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/runtime-api-usage: "true"
+                  app.kubernetes.io/version: 2.9.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-pod-dns-spoof-bdj.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.9.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-dns-spoof-bdj
+        path: /tmp/chaosengine-pod-dns-spoof-bdj.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            kind: ChaosEngine
+            metadata:
+              generateName: pod-dns-spoof-bdj
+              namespace: "{{workflow.parameters.adminModeNamespace}}"
+              labels:
+                instance_id: 439fb673-8e22-440b-9611-ec9f0bfe4344
+                context: pod-dns-spoof-bdj_litmus
+                workflow_name: custom-workflow-1665059039
+            spec:
+              appinfo:
+                appns: link
+                applabel: app.kubernetes.io/instance=link
+                appkind: deployment
+              engineState: active
+              auxiliaryAppInfo: ""
+              chaosServiceAccount: litmus-admin
+              experiments:
+                - name: pod-dns-spoof
+                  spec:
+                    components:
+                      env:
+                        - name: TOTAL_CHAOS_DURATION
+                          value: "300"
+                        - name: SPOOF_MAP
+                          value: '{"lnk-product-client.34.85.201.244.nip.io":"fakelnk-product-client.34.85.201.244.nip.io"}'
+                        - name: CONTAINER_RUNTIME
+                          value: docker
+                        - name: SOCKET_PATH
+                          value: /var/run/docker.sock
+                        - name: PODS_AFFECTED_PERC
+                          value: "100"
+                    probe:
+                      - name: linkurlprobeSOT
+                        type: httpProbe
+                        mode: SOT
+                        runProperties:
+                          probeTimeout: 30
+                          retry: 3
+                          interval: 10
+                          stopOnFailure: false
+                        httpProbe/inputs:
+                          url: https://lnk-product-client.34.85.201.244.nip.io/
+                          insecureSkipVerify: false
+                          responseTimeout: 5
+                          method:
+                            get:
+                              criteria: ==
+                              responseCode: "200"
+                      - name: linkurlprobe
+                        type: httpProbe
+                        mode: Continuous
+                        runProperties:
+                          probeTimeout: 30
+                          retry: 3
+                          interval: 10
+                          stopOnFailure: false
+                        httpProbe/inputs:
+                          url: https://lnk-product-client.34.85.201.244.nip.io/
+                          insecureSkipVerify: false
+                          responseTimeout: 5
+                          method:
+                            get:
+                              criteria: ==
+                              responseCode: "200"
+                      - name: linkurlprobeEOT
+                        type: httpProbe
+                        mode: EOT
+                        runProperties:
+                          probeTimeout: 30
+                          retry: 3
+                          interval: 10
+                          stopOnFailure: false
+                        httpProbe/inputs:
+                          url: https://lnk-product-client.34.85.201.244.nip.io/
+                          insecureSkipVerify: false
+                          responseTimeout: 5
+                          method:
+                            get:
+                              criteria: ==
+                              responseCode: "200"
+              annotationCheck: "false"
+    metadata:
+      labels:
+        weight: "10"
+    name: pod-dns-spoof-bdj
+    outputs: {}
+status:
+  finishedAt: null
+  startedAt: null
