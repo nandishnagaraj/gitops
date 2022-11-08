@@ -1,0 +1,118 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 9f2d58e8-31ea-4850-9eeb-a34ead754e75
+    subject: custom-scenario-1667897676_litmus
+    workflow_id: e8cce473-ce8e-445e-abc1-6e83df1c43fc
+    workflows.argoproj.io/controller-instanceid: 9f2d58e8-31ea-4850-9eeb-a34ead754e75
+  name: custom-scenario-1667897676
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: TARGET_PODS
+      value: ""
+    - name: APP_NAMESPACE
+      value: k1launch
+    - name: APP_KIND
+      value: ""
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1launch
+    - name: TOTAL_CHAOS_DURATION
+      value: "900"
+    - name: LATENCY
+      value: "840000"
+    - name: TARGET_SERVICE_PORT
+      value: "8443"
+    - name: PODS_AFFECTED_PERC
+      value: "100"
+    - name: adminModeNamespace
+      value: litmus
+    - name: PROXY_PORT
+      value: ""
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: pod-http-latency
+        template: pod-http-latency
+  - container:
+      args:
+      - kubectl apply -f https://hub.litmuschaos.io/api/chaos/2.12.0?file=charts/generic/pod-http-latency/experiment.yaml
+        -n {{workflow.parameters.adminModeNamespace}} ; sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:latest
+      name: ""
+      resources: {}
+    inputs: {}
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:latest
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-http-latency
+        path: /tmp/chaosengine.yaml
+        raw:
+          data: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n
+            \ namespace: \"{{workflow.parameters.adminModeNamespace}}\"\n  generateName:
+            pod-http-latency\n  labels:\n    instance_id: 4016a982-be24-493f-8899-918d2047e962\nspec:\n
+            \ appinfo:\n    appns: {{workflow.parameters.APP_NAMESPACE}}\n    applabel:
+            {{workflow.parameters.APP_LABEL}}\n    appkind: {{workflow.parameters.APP_KIND}}\n
+            \ jobCleanUpPolicy: delete\n  engineState: active\n  chaosServiceAccount:
+            litmus-admin\n  components:\n    runner:\n      nodeSelector: # nodeSelector
+            controls placement of chaos runner (spawned by chaos operator)\n        chaos:
+            \"true\"\n      tolerations:\n        - key: chaos\n          operator:
+            Equal\n          value: \"true\"\n          effect: NoSchedule\n  experiments:\n
+            \ - name: pod-http-latency\n    spec:\n      components:\n        nodeSelector:
+            # nodeSelector controls placement of node drain experiment pod (spawned
+            by chaos runner)\n          chaos: \"true\"\n        tolerations: # tolerations
+            apply to node drain experiment pod (spawned by chaos runner)\n          -
+            key: \"chaos\"\n            operator: \"Equal\"\n            value: \"true\"\n
+            \           effect: \"NoSchedule\"\n        env:\n          - name: TOTAL_CHAOS_DURATION\n
+            \           value: '{{workflow.parameters.TOTAL_CHAOS_DURATION}}' # in
+            seconds\n          - name: LATENCY\n            value: '{{workflow.parameters.LATENCY}}'
+            # in ms\n          - name: TARGET_SERVICE_PORT\n            value: '{{workflow.parameters.TARGET_SERVICE_PORT}}'
+            \       \n          - name: PODS_AFFECTED_PERC\n            value: '{{workflow.parameters.PODS_AFFECTED_PERC}}'\n
+            \         - name: PROXY_PORT\n            value: '{{workflow.parameters.PROXY_PORT}}'\n
+            \         - name: TARGET_PODS\n            value: '{{workflow.parameters.TARGET_PODS}}'\n
+            \         # provide the name of container runtime\n          # it supports
+            docker, containerd, crio\n          - name: CONTAINER_RUNTIME\n            value:
+            'containerd'\n          # provide the socket file path\n          - name:
+            SOCKET_PATH\n            value: '/run/containerd/containerd.sock'\n"
+    metadata:
+      labels:
+        weight: "10"
+    name: pod-http-latency
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
