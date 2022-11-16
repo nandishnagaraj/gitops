@@ -1,0 +1,354 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 9f2d58e8-31ea-4850-9eeb-a34ead754e75
+    subject: custom-scenario-1668589480_litmus
+    workflow_id: 130a0c26-21fb-4db5-bea2-22646c28d701
+    workflows.argoproj.io/controller-instanceid: 9f2d58e8-31ea-4850-9eeb-a34ead754e75
+  name: custom-scenario-1668589480
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+    - name: APP_NAMESPACE
+      value: k1launch
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1launch
+    - name: APP_KIND
+      value: ""
+    - name: TOTAL_CHAOS_DURATION
+      value: "300"
+    - name: NETWORK_PACKET_LOSS_PERCENTAGE
+      value: "50"
+    - name: CONTAINER_RUNTIME
+      value: containerd
+    - name: SOCKET_PATH
+      value: /var/run/containerd/containerd.sock
+    - name: PODS_AFFECTED_PERC
+      value: "100"
+    - name: DOMAIN
+      value: 35.245.146.206
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: pod-network-loss-j32
+        template: pod-network-loss-j32
+  - container:
+      args:
+      - kubectl apply -f /tmp/pod-network-loss-j32.yaml -n {{workflow.parameters.adminModeNamespace}}
+        &&  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-network-loss-j32
+        path: /tmp/pod-network-loss-j32.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Injects network packet loss on pods belonging to an app deployment
+            kind: ChaosExperiment
+            metadata:
+              name: pod-network-loss
+              labels:
+                name: pod-network-loss
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.12.0
+            spec:
+              definition:
+                scope: Namespaced
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - deployments
+                      - statefulsets
+                      - replicasets
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - apps.openshift.io
+                    resources:
+                      - deploymentconfigs
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - replicationcontrollers
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - argoproj.io
+                    resources:
+                      - rollouts
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                image: litmuschaos/go-runner:2.12.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name pod-network-loss
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_CONTAINER
+                    value: ""
+                  - name: LIB_IMAGE
+                    value: litmuschaos/go-runner:2.12.0
+                  - name: NETWORK_INTERFACE
+                    value: eth0
+                  - name: TC_IMAGE
+                    value: gaiadocker/iproute2
+                  - name: NETWORK_PACKET_LOSS_PERCENTAGE
+                    value: "100"
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: PODS_AFFECTED_PERC
+                    value: ""
+                  - name: TARGET_PODS
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: CONTAINER_RUNTIME
+                    value: docker
+                  - name: DESTINATION_IPS
+                    value: ""
+                  - name: DESTINATION_HOSTS
+                    value: ""
+                  - name: SOCKET_PATH
+                    value: /var/run/docker.sock
+                  - name: SEQUENCE
+                    value: parallel
+                labels:
+                  name: pod-network-loss
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/runtime-api-usage: "true"
+                  app.kubernetes.io/version: 2.12.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-pod-network-loss-j32.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-network-loss-j32
+        path: /tmp/chaosengine-pod-network-loss-j32.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            kind: ChaosEngine
+            metadata:
+              namespace: "{{workflow.parameters.adminModeNamespace}}"
+              generateName: pod-network-loss-j32
+              labels:
+                workflow_run_id: "{{workflow.uid}}"
+            spec:
+              engineState: active
+              appinfo:
+                appns: "{{workflow.parameters.APP_NAMESPACE}}"
+                applabel: "{{workflow.parameters.APP_LABEL}}"
+                appkind: "{{workflow.parameters.APP_KIND}}"
+              chaosServiceAccount: litmus-admin
+              components:
+                runner:
+                  nodeSelector:
+                    chaos: "true"
+                  tolerations:
+                    - key: "chaos"
+                      operator: "Equal"
+                      value: "true"
+                      effect: "NoSchedule"
+              experiments:
+                - name: pod-network-loss
+                  spec:
+                    components:
+                      nodeSelector:
+                        chaos: "true"
+                      tolerations:
+                        - key: "chaos"
+                          operator: "Equal"
+                          value: "true"
+                          effect: "NoSchedule"
+                      env:
+                        - name: TOTAL_CHAOS_DURATION
+                          value: "{{workflow.parameters.TOTAL_CHAOS_DURATION}}"
+                        - name: NETWORK_PACKET_LOSS_PERCENTAGE
+                          value: "{{workflow.parameters.NETWORK_PACKET_LOSS_PERCENTAGE}}"
+                        - name: CONTAINER_RUNTIME
+                          value: "{{workflow.parameters.CONTAINER_RUNTIME}}"
+                        - name: SOCKET_PATH
+                          value: "{{workflow.parameters.SOCKET_PATH}}"
+                        - name: PODS_AFFECTED_PERC
+                          value: "{{workflow.parameters.PODS_AFFECTED_PERC}}"
+                    probe:
+                      - name: Launch-server-start-probe
+                        type: httpProbe
+                        mode: SOT
+                        runProperties:
+                          probeTimeout: 20
+                          retry: 1
+                          interval: 20
+                          stopOnFailure: false
+                        httpProbe/inputs:
+                          url: https://hcl-launch-server.{{workflow.parameters.DOMAIN}}.nip.io/
+                          insecureSkipVerify: true
+                          responseTimeout: 3000
+                          method:
+                            get:
+                              criteria: ==
+                              responseCode: "200"
+                      - name: Launch-server-continuous-probe
+                        type: httpProbe
+                        mode: Continuous
+                        runProperties:
+                          probeTimeout: 20
+                          retry: 6
+                          interval: 20
+                          stopOnFailure: false
+                        httpProbe/inputs:
+                          url: https://hcl-launch-server.{{workflow.parameters.DOMAIN}}.nip.io/
+                          insecureSkipVerify: true
+                          responseTimeout: 3000
+                          method:
+                            get:
+                              criteria: ==
+                              responseCode: "200"
+                      - name: Launch-server-end-probe
+                        type: httpProbe
+                        mode: EOT
+                        runProperties:
+                          probeTimeout: 20
+                          retry: 1
+                          interval: 20
+                          stopOnFailure: false
+                        httpProbe/inputs:
+                          url: https://hcl-launch-server.{{workflow.parameters.DOMAIN}}.nip.io/
+                          insecureSkipVerify: true
+                          responseTimeout: 3000
+                          method:
+                            get:
+                              criteria: ==
+                              responseCode: "200"
+              annotationCheck: "false"
+    metadata:
+      labels:
+        weight: "10"
+    name: pod-network-loss-j32
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
