@@ -1,0 +1,256 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 5d48c8b4-5953-4e3a-9bee-63f59b2636cd
+    subject: custom-scenario-1669632134_litmus
+    workflow_id: 94ea50ae-0e59-4fd9-a534-a62f62f85a72
+    workflows.argoproj.io/controller-instanceid: 5d48c8b4-5953-4e3a-9bee-63f59b2636cd
+  name: custom-scenario-1669632134
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+  entrypoint: custom-chaos
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: pod-delete-4o0
+        template: pod-delete-4o0
+  - container:
+      args:
+      - kubectl apply -f /tmp/pod-delete-4o0.yaml -n {{workflow.parameters.adminModeNamespace}}
+        |  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.9.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-delete-4o0
+        path: /tmp/pod-delete-4o0.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Deletes a pod belonging to a deployment/statefulset/daemonset
+            kind: ChaosExperiment
+            metadata:
+              name: pod-delete
+              labels:
+                name: pod-delete
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.9.0
+            spec:
+              definition:
+                scope: Namespaced
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - deployments
+                      - statefulsets
+                      - replicasets
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - apps.openshift.io
+                    resources:
+                      - deploymentconfigs
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - replicationcontrollers
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - argoproj.io
+                    resources:
+                      - rollouts
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                image: litmuschaos/go-runner:2.9.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name pod-delete
+                command:
+                  - /bin/bash
+                env:
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "15"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: FORCE
+                    value: "true"
+                  - name: CHAOS_INTERVAL
+                    value: "5"
+                  - name: PODS_AFFECTED_PERC
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: TARGET_PODS
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: SEQUENCE
+                    value: parallel
+                labels:
+                  name: pod-delete
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.9.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-pod-delete-4o0.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.9.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-delete-4o0
+        path: /tmp/chaosengine-pod-delete-4o0.yaml
+        raw:
+          data: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n
+            \ namespace: \"{{workflow.parameters.adminModeNamespace}}\"\n  generateName:
+            pod-delete-4o0\n  labels:\n    instance_id: 39f66a6b-a81c-4dbf-b4b6-92fc3ea3e0a3\n
+            \   context: pod-delete-4o0_litmus\n    workflow_name: custom-chaos-workflow-1664176110\nspec:\n
+            \ appinfo:\n    appns: prod-hwa\n  engineState: active\n  chaosServiceAccount:
+            litmus-admin\n  experiments:\n    - name: pod-delete\n      spec:\n        components:\n
+            \         env:\n            - name: TOTAL_CHAOS_DURATION\n              value:
+            \"600\"\n            - name: FORCE\n              value: \"false\"\n            -
+            name: PODS_AFFECTED_PERC\n              value: \"0\"\n            - name:
+            TARGET_PODS\n              value: \"prod-hwa-waserver-1,prod-hwa-waconsole-0\"\n
+            \       probe:\n          - name: API Probe Start\n            type: httpProbe\n
+            \           mode: SOT\n            runProperties:\n              probeTimeout:
+            60\n              retry: 5\n              interval: 60\n              stopOnFailure:
+            false\n            httpProbe/inputs:\n              url: https://waserver.hwaprd.hxwa.now.hclsoftware.cloud/twsd/\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            ==\n                  responseCode: \"200\"\n          - name: API Probe
+            During\n            type: httpProbe\n            mode: Continuous\n            runProperties:\n
+            \             probeTimeout: 300\n              retry: 1\n              interval:
+            300\n              stopOnFailure: false\n            httpProbe/inputs:\n
+            \             url: https://waserver.hwaprd.hxwa.now.hclsoftware.cloud/twsd/\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            ==\n                  responseCode: \"200\"\n          - name: api\n            type:
+            cmdProbe\n            mode: Continuous\n            runProperties:\n              probeTimeout:
+            300\n              retry: 300\n              interval: 60\n              stopOnFailure:
+            false\n            cmdProbe/inputs:\n              command: ./agentapiprobe.sh\n
+            \             source:\n                image: gcr.io/blackjack-209019/services/lnk/hclwa:latest\n
+            \               hostNetwork: false\n              comparator:\n                type:
+            string\n                criteria: notMatches\n                value: \"120\"\n
+            \         - name: API Probe After \n            type: httpProbe\n            mode:
+            EOT\n            runProperties:\n              probeTimeout: 60\n              retry:
+            5\n              interval: 60\n              stopOnFailure: false\n            httpProbe/inputs:\n
+            \             url: https://waserver.hwaprd.hxwa.now.hclsoftware.cloud/twsd/\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            ==\n                  responseCode: \"200\"        \n  annotationCheck:
+            \"false\"\n"
+    metadata:
+      labels:
+        weight: "10"
+    name: pod-delete-4o0
+    outputs: {}
+status:
+  finishedAt: null
+  startedAt: null
