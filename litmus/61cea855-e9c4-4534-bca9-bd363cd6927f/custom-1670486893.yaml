@@ -197,7 +197,7 @@ spec:
                     components:
                       env:
                         - name: TOTAL_CHAOS_DURATION
-                          value: "300"
+                          value: "60"
                         - name: TARGET_NODE
                           value: gke-hcllink-default-pool-7d131db4-6ea5
                       nodeSelector:
