@@ -233,7 +233,7 @@ spec:
                         - name: FORCE
                           value: "true"
                         - name: TARGET_PODS
-                          value: "k1link-lnk-product-server-8687dfbfdc-wj7rs"
+                          value: "k1link-lnk-product-server-8687dfbfdc-xzzwh"
                     probe: []
     metadata:
       labels:
