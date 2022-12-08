@@ -227,9 +227,9 @@ spec:
                     components:
                       env:
                         - name: TOTAL_CHAOS_DURATION
-                          value: "100"
+                          value: "90"
                         - name: CHAOS_INTERVAL
-                          value: "100"
+                          value: "90"
                         - name: FORCE
                           value: "true"
                         - name: TARGET_PODS
