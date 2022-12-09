@@ -1,0 +1,260 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 61dd221f-824e-4f36-acff-a28fa3f55724
+    subject: custom-scenario-1670581429_litmus
+    workflow_id: 46c6d019-e056-48f4-a3d8-1e5ef355aee5
+    workflows.argoproj.io/controller-instanceid: 61dd221f-824e-4f36-acff-a28fa3f55724
+  name: custom-scenario-1670581429
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: TARGET_NODE
+      value: gke-hcllink-default-pool-7d131db4-lzxj
+    - name: DOMAIN
+      value: 34.145.224.218
+    - name: APP_NAMESPACE
+      value: k1dx
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1dx
+    - name: TOTAL_CHAOS_DURATION
+      value: "600"
+    - name: adminModeNamespace
+      value: litmus
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: node-drain
+        template: node-drain
+  - container:
+      args:
+      - kubectl apply -f /tmp/node-drain.yaml -n {{workflow.parameters.adminModeNamespace}}
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:latest
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-drain
+        path: /tmp/node-drain.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Drain the node where application pod is scheduled
+            kind: ChaosExperiment
+            metadata:
+              name: node-drain
+              labels:
+                name: node-drain
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.7.0
+            spec:
+              definition:
+                scope: Cluster
+                permissions:
+                  - apiGroups:
+                      - ""
+                      - batch
+                      - litmuschaos.io
+                      - apps
+                    resources:
+                      - jobs
+                      - pods
+                      - events
+                      - pods/log
+                      - pods/exec
+                      - daemonsets
+                      - pods/eviction
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - nodes
+                    verbs:
+                      - get
+                      - list
+                      - patch
+                image: litmuschaos/go-runner:2.7.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name node-drain
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_NODE
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "600"
+                  - name: LIB
+                    value: litmus
+                  - name: RAMP_TIME
+                    value: ""
+                labels:
+                  name: node-drain
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.7.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-node-drain.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:latest
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-drain
+        path: /tmp/chaosengine-node-drain.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            kind: ChaosEngine
+            metadata:
+              namespace: "{{workflow.parameters.adminModeNamespace}}"
+              generateName: node-drain
+              labels:
+                instance_id: 16ece9d3-7f3e-4d26-af85-5a720ffb62be
+                context: node-drain_litmus
+            spec:
+              jobCleanUpPolicy: retain
+              engineState: active
+              auxiliaryAppInfo: ""
+              chaosServiceAccount: litmus-admin
+              components:
+                runner:
+                  nodeSelector: # nodeSelector controls placement of chaos runner (spawned by chaos operator)
+                    chaos: "true"
+                  tolerations: # tolerations apply to chaos runner (spawned by chaos operator)
+                    - key: "chaos"
+                      operator: "Equal"
+                      value: "true"
+                      effect: "NoSchedule"
+              experiments:
+                - name: node-drain
+                  spec:
+                    components:
+                      nodeSelector: # nodeSelector controls placement of node drain experiment pod (spawned by chaos runner)
+                        chaos: "true"
+                      tolerations: # tolerations apply to node drain experiment pod (spawned by chaos runner)
+                        - key: "chaos"
+                          operator: "Equal"
+                          value: "true"
+                          effect: "NoSchedule"
+                      env:
+                        - name: TARGET_NODE
+                          value: "{{workflow.parameters.TARGET_NODE}}"
+                        - name: APP_NAMESPACE
+                          value: "{{workflow.parameters.APP_NAMESPACE}}"
+                        - name: APP_LABEL
+                          value: "{{workflow.parameters.APP_LABEL}}"
+                        - name: TOTAL_CHAOS_DURATION
+                          value: "{{workflow.parameters.TOTAL_CHAOS_DURATION}}"
+                      statusCheckTimeouts:
+                        delay: 2 # delay controls how often to check for AUT containers readiness
+                        timeout: 2700 # delay controls timeout (how long to allow waiting) for AUT containers readiness
+                    probe:
+                      - name: DX-AVAILABILITY-START
+                        type: cmdProbe
+                        mode: SOT
+                        runProperties:
+                          probeTimeout: 20
+                          retry: 2
+                          interval: 20
+                          stopOnFailure: false
+                        cmdProbe/inputs:
+                          command: ./dxscript.sh 34.145.224.218 wpsadmin DAM test testdesc
+                          source:
+                            image: gcr.io/blackjack-209019/services/demig/hcldx:latest
+                            hostNetwork: false
+                          comparator:
+                            type: string
+                            criteria: contains
+                            value: "200"
+                      - name: DX-AVAILABILITY-CONTINUOUS
+                        type: cmdProbe
+                        mode: Continuous
+                        runProperties:
+                          probeTimeout: 30
+                          retry: 7
+                          interval: 30
+                          stopOnFailure: false
+                        httpProbe/inputs: {}
+                        cmdProbe/inputs:
+                          command: ./dxscript.sh 34.145.224.218 wpsadmin DAM test testdesc
+                          source:
+                            image: gcr.io/blackjack-209019/services/demig/hcldx:latest
+                            hostNetwork: false
+                          comparator:
+                            type: string
+                            criteria: contains
+                            value: "200"
+                      - name: DX-AVAILABILITY-END
+                        type: cmdProbe
+                        mode: EOT
+                        runProperties:
+                          probeTimeout: 20
+                          retry: 2
+                          interval: 20
+                          stopOnFailure: false
+                        httpProbe/inputs: {}
+                        cmdProbe/inputs:
+                          command: ./dxscript.sh 34.145.224.218 wpsadmin DAM test testdesc
+                          source:
+                            image: gcr.io/blackjack-209019/services/demig/hcldx:latest
+                            hostNetwork: false
+                          comparator:
+                            type: string
+                            criteria: contains
+                            value: "200"
+              annotationCheck: "false"
+    metadata:
+      labels:
+        weight: "10"
+    name: node-drain
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
