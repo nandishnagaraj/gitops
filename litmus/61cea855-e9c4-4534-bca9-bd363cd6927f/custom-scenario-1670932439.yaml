@@ -1,0 +1,248 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 61dd221f-824e-4f36-acff-a28fa3f55724
+    subject: custom-scenario-1670932439_litmus
+    workflow_id: d4c20d83-e13a-4b23-abc8-c5e332a6c13b
+    workflows.argoproj.io/controller-instanceid: 61dd221f-824e-4f36-acff-a28fa3f55724
+  name: custom-scenario-1670932439
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: TARGET_NODE
+      value: gke-hcllink-default-pool-7d131db4-cic6
+    - name: APP_NAMESPACE
+      value: k1dx
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1dx
+    - name: TOTAL_CHAOS_DURATION
+      value: "600"
+    - name: adminModeNamespace
+      value: litmus
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: node-drain-0bk
+        template: node-drain-0bk
+  - container:
+      args:
+      - kubectl apply -f /tmp/node-drain-0bk.yaml -n {{workflow.parameters.adminModeNamespace}}
+        &&  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-drain-0bk
+        path: /tmp/node-drain-0bk.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Drain the node where application pod is scheduled
+            kind: ChaosExperiment
+            metadata:
+              name: node-drain
+              labels:
+                name: node-drain
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.12.0
+            spec:
+              definition:
+                scope: Cluster
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                      - pods/eviction
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                      - delete
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - nodes
+                    verbs:
+                      - get
+                      - list
+                      - patch
+                image: litmuschaos/go-runner:2.12.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name node-drain
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_NODE
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: LIB
+                    value: litmus
+                  - name: RAMP_TIME
+                    value: ""
+                labels:
+                  name: node-drain
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.12.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-node-drain-0bk.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-drain-0bk
+        path: /tmp/chaosengine-node-drain-0bk.yaml
+        raw:
+          data: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n
+            \ namespace: \"{{workflow.parameters.adminModeNamespace}}\"\n  generateName:
+            node-drain-0bk\n  labels:\n    workflow_run_id: \"{{workflow.uid}}\"\nspec:\n
+            \ engineState: active\n  auxiliaryAppInfo: \"\"\n  chaosServiceAccount:
+            litmus-admin\n  components:\n    runner:\n      nodeSelector: # nodeSelector
+            controls placement of chaos runner (spawned by chaos operator)\n        chaos:
+            \"true\"\n      tolerations: # tolerations apply to chaos runner (spawned
+            by chaos operator)\n        - key: \"chaos\"\n          operator: \"Equal\"\n
+            \         value: \"true\"\n          effect: \"NoSchedule\"\n  experiments:\n
+            \   - name: node-drain\n      spec:\n        components:\n          nodeSelector:
+            # nodeSelector controls placement of node drain experiment pod (spawned
+            by chaos runner)\n            chaos: \"true\"\n          tolerations:
+            # tolerations apply to node drain experiment pod (spawned by chaos runner)\n
+            \           - key: \"chaos\"\n              operator: \"Equal\"\n              value:
+            \"true\"\n              effect: \"NoSchedule\"\n          env:\n            -
+            name: TARGET_NODE\n              value: \"{{workflow.parameters.TARGET_NODE}}\"\n
+            \           - name: APP_NAMESPACE\n              value: \"{{workflow.parameters.APP_NAMESPACE}}\"\n
+            \           - name: APP_LABEL\n              value: \"{{workflow.parameters.APP_LABEL}}\"\n
+            \           - name: TOTAL_CHAOS_DURATION\n              value: \"{{workflow.parameters.TOTAL_CHAOS_DURATION}}\"\n
+            \       probe:\n          - name: DX-EDGE-PROBE\n            type: cmdProbe\n
+            \           mode: Edge\n            runProperties:\n              probeTimeout:
+            20\n              retry: 4\n              interval: 20\n              stopOnFailure:
+            false\n              initialDelaySeconds: 10\n            cmdProbe/inputs:\n
+            \             command: ./dxscript.sh 34.86.107.240 wpsadmin DAM test testdesc\n
+            \             source:\n                image: gcr.io/blackjack-209019/services/hcldx/hclhelmdx:latest\n
+            \               hostNetwork: false\n              comparator:\n                type:
+            string\n                criteria: contains\n                value: \"409\"\n
+            \         - name: DX-ONCHAOS-PROBE\n            type: cmdProbe\n            mode:
+            OnChaos\n            runProperties:\n              probeTimeout: 30\n
+            \             retry: 12\n              interval: 30\n              stopOnFailure:
+            false\n              initialDelaySeconds: 10\n            httpProbe/inputs:
+            {}\n            cmdProbe/inputs:\n              command: ./dxscript.sh
+            34.86.107.240 wpsadmin DAM test testdesc\n              source:\n                image:
+            gcr.io/blackjack-209019/services/hcldx/hclhelmdx:latest\n                hostNetwork:
+            false\n              comparator:\n                type: string\n                criteria:
+            contains\n                value: \"409\"\n  annotationCheck: \"false\"
+            \             \n"
+    metadata:
+      labels:
+        weight: "10"
+    name: node-drain-0bk
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
