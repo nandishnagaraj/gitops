@@ -1,0 +1,276 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 61dd221f-824e-4f36-acff-a28fa3f55724
+    subject: custom-scenario-1671013146_litmus
+    workflow_id: e4c53a6d-9cfc-4022-8e5b-351f4d2e3013
+    workflows.argoproj.io/controller-instanceid: 61dd221f-824e-4f36-acff-a28fa3f55724
+  name: custom-scenario-1671013146
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: TARGET_PODS
+      value: ""
+    - name: APP_NAME_SPACE
+      value: k1bigfix
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1bigfix
+    - name: APP_KIND
+      value: ""
+    - name: SEQUENCE
+      value: parallel
+    - name: adminModeNamespace
+      value: litmus
+    - name: DOMAIN
+      value: 35.245.150.49
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: pod-delete-txz
+        template: pod-delete-txz
+  - container:
+      args:
+      - kubectl apply -f /tmp/pod-delete-txz.yaml -n {{workflow.parameters.adminModeNamespace}}
+        |  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.9.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-delete-txz
+        path: /tmp/pod-delete-txz.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Deletes a pod belonging to a deployment/statefulset/daemonset
+            kind: ChaosExperiment
+            metadata:
+              name: pod-delete
+              labels:
+                name: pod-delete
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.9.0
+            spec:
+              definition:
+                scope: Namespaced
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - deployments
+                      - statefulsets
+                      - replicasets
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - apps.openshift.io
+                    resources:
+                      - deploymentconfigs
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - replicationcontrollers
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - argoproj.io
+                    resources:
+                      - rollouts
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                image: litmuschaos/go-runner:2.9.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name pod-delete
+                command:
+                  - /bin/bash
+                env:
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "15"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: FORCE
+                    value: "true"
+                  - name: CHAOS_INTERVAL
+                    value: "5"
+                  - name: PODS_AFFECTED_PERC
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: TARGET_PODS
+                    value: "{{workflow.parameters.TARGET_PODS}}"
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: SEQUENCE
+                    value: parallel
+                labels:
+                  name: pod-delete
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.9.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-pod-delete-txz.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.9.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-delete-txz
+        path: /tmp/chaosengine-pod-delete-txz.yaml
+        raw:
+          data: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n
+            \ namespace: \"{{workflow.parameters.adminModeNamespace}}\"\n  generateName:
+            pod-delete-txz\n  labels:\n    instance_id: c66fb028-3b13-46cf-9a81-441d2df5858a\n
+            \   context: pod-delete-txz_k1litmus\nspec:\n  appinfo:\n    appns: \"{{workflow.parameters.APP_NAME_SPACE}}\"\n
+            \   applabel: \"{{workflow.parameters.APP_LABEL}}\"\n    appkind: \"{{workflow.parameters.APP_KIND}}\"\n
+            \ engineState: active\n  chaosServiceAccount: litmus-admin\n  components:\n
+            \   runner:\n      nodeSelector:\n        chaos: \"true\"\n      tolerations:\n
+            \       - key: \"chaos\"\n          operator: \"Equal\"\n          value:
+            \"true\"\n          effect: \"NoSchedule\"\n  experiments:\n    - name:
+            pod-delete\n      spec:\n        components:\n          nodeSelector:\n
+            \           chaos: \"true\"\n          tolerations:\n            - key:
+            \"chaos\"\n              operator: \"Equal\"\n              value: \"true\"\n
+            \             effect: \"NoSchedule\"\n          env:\n            - name:
+            TOTAL_CHAOS_DURATION\n              value: \"300\"\n            - name:
+            CHAOS_INTERVAL\n              value: \"300\"\n            - name: FORCE\n
+            \             value: \"false\"\n            - name: PODS_AFFECTED_PERC\n
+            \             value: \"100\"\n            - name: SEQUENCE\n              value:
+            \"{{workflow.parameters.SEQUENCE}}\"\n        probe: \n          - name:
+            BIGFIX-availability-start-probe\n            type: httpProbe\n            mode:
+            SOT\n            runProperties:\n              probeTimeout: 20\n              retry:
+            3\n              interval: 20\n              probePollingInterval: 1\n
+            \           httpProbe/inputs:\n              url: 'https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login'\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            '=='\n                  responseCode: '200'\n          - name: BIGFIX-availability-continuous-probe\n
+            \           type: httpProbe\n            mode: Continuous\n            runProperties:\n
+            \             probeTimeout: 30\n              retry: 7\n              interval:
+            20\n              probePollingInterval: 1\n            httpProbe/inputs:\n
+            \             url: 'https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login'\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            '=='\n                  responseCode: '200'\n          - name: BIGFIX-availability-end-probe\n
+            \           type: httpProbe\n            mode: EOT\n            runProperties:\n
+            \             probeTimeout: 20\n              retry: 3\n              interval:
+            20\n              probePollingInterval: 1\n            httpProbe/inputs:\n
+            \             url: 'https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login'\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            '=='\n                  responseCode: '200'\n  annotationCheck: \"false\"\n"
+    metadata:
+      labels:
+        weight: "10"
+    name: pod-delete-txz
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
