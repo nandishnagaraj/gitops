@@ -1,0 +1,202 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 61dd221f-824e-4f36-acff-a28fa3f55724
+    subject: custom-scenario-1671090145_litmus
+    workflow_id: 09b336c4-635a-4a96-a91f-8feee6b486e7
+    workflows.argoproj.io/controller-instanceid: 61dd221f-824e-4f36-acff-a28fa3f55724
+  name: custom-scenario-1671090145
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+    - name: APP_NAME_SPACE
+      value: k1bigfix
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1bigfix
+    - name: APP_PUBLIC_IP
+      value: 34.150.250.209
+    - name: CONTAINER_PATH
+      value: /var/lib/containerd/io.containerd.grpc.v1.cri/containers
+    - name: CONTAINER_RUNTIME
+      value: containerd
+    - name: SOCKET_PATH
+      value: /run/containerd/containerd.sock
+    - name: EPHEMERAL_STORAGE_MEBIBYTES
+      value: "11111111"
+    - name: DATA_BLOCK_SIZE
+      value: "99999"
+    - name: NODE
+      value: gke-hcllink-default-pool-7d131db4-qn6n
+  entrypoint: custom-chaos
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: disk-fill
+        template: disk-fill
+  - container:
+      args:
+      - kubectl apply -f /tmp/disk-fill.yaml -n {{workflow.parameters.adminModeNamespace}}
+        |  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:latest
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: disk-fill
+        path: /tmp/disk-fill.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Fillup Ephemeral Storage of a Resource
+            kind: ChaosExperiment
+            metadata:
+              name: disk-fill
+              labels:
+                name: disk-fill
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.2.0
+            spec:
+              definition:
+                scope: Namespaced
+                permissions:
+                  - apiGroups:
+                      - ""
+                      - apps
+                      - batch
+                      - apps.openshift.io
+                      - argoproj.io
+                      - litmuschaos.io
+                    resources:
+                      - jobs
+                      - pods
+                      - pods/exec
+                      - pods/log
+                      - replicationcontrollers
+                      - deployments
+                      - statefulsets
+                      - daemonsets
+                      - replicasets
+                      - deploymentconfigs
+                      - rollouts
+                      - events
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                      - deletecollection
+                image: litmuschaos/go-runner:2.3.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name disk-fill
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_CONTAINER
+                    value: ""
+                  - name: FILL_PERCENTAGE
+                    value: ""
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "600"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: DATA_BLOCK_SIZE
+                    value: "256"
+                  - name: TARGET_PODS
+                    value: ""
+                  - name: EPHEMERAL_STORAGE_MEBIBYTES
+                    value: "111111"
+                  - name: PODS_AFFECTED_PERC
+                    value: "10000"
+                  - name: LIB_IMAGE
+                    value: litmuschaos/go-runner:2.3.0
+                  - name: CONTAINER_PATH
+                    value: /var/lib/containerd/io.containerd.grpc.v1.cri/containers
+                  - name: SEQUENCE
+                    value: parallel
+                labels:
+                  name: disk-fill
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/host-path-usage: "true"
+                  app.kubernetes.io/version: latest
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-disk-fill.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:latest
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: disk-fill
+        path: /tmp/chaosengine-disk-fill.yaml
+        raw:
+          data: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n
+            \ namespace: \"{{workflow.parameters.adminModeNamespace}}\"\n  generateName:
+            disk-fill\n  labels:\n    instance_id: 0ef769cd-e11a-48b0-99bc-04fce0d1abb3\n
+            \   context: disk-fill_litmus\n    workflow_name: custom-chaos-workflow-1638268108\nspec:\n
+            \ jobCleanUpPolicy: retain\n  engineState: active\n  auxiliaryAppInfo:
+            \"\"\n  appinfo:\n    appns: \"{{workflow.parameters.APP_NAME_SPACE}}\"\n
+            \   applabel: \"{{workflow.parameters.APP_LABEL}}\"\n    appkind: deployment\n
+            \ chaosServiceAccount: litmus-admin\n  experiments:\n    - name: disk-fill\n
+            \     spec:\n        components:\n          env:\n            - name:
+            TOTAL_CHAOS_DURATION\n              value: \"900\"\n            - name:
+            FILL_PERCENTAGE\n              value: \"\"\n            - name: PODS_AFFECTED_PERC\n
+            \             value: \"\"\n            - name: CONTAINER_PATH\n              value:
+            \"{{workflow.parameters.CONTAINER_PATH}}\"\n            - name: CONTAINER_RUNTIME\n
+            \             value: \"{{workflow.parameters.CONTAINER_RUNTIME}}\"\n            -
+            name: SOCKET_PATH\n              value: \"{{workflow.parameters.SOCKET_PATH}}\"\n
+            \           - name: EPHEMERAL_STORAGE_MEBIBYTES\n              value:
+            \"{{workflow.parameters.EPHEMERAL_STORAGE_MEBIBYTES}}\"\n            -
+            name: DATA_BLOCK_SIZE\n              value: \"{{workflow.parameters.DATA_BLOCK_SIZE}}\"\n
+            \         nodeSelector:\n            kubernetes.io/hostname: \"{{workflow.parameters.NODE}}\"\n
+            \       probe:\n          - name: bvt-endpoint-after-chaos\n            type:
+            cmdProbe\n            mode: EOT\n            runProperties:\n              probeTimeout:
+            120\n              retry: 3\n              interval: 30\n              stopOnFailure:
+            false\n            cmdProbe/inputs:\n              command: './TestNonSandboxEndpointsWithoutDeploy.sh
+            {{workflow.parameters.APP_PUBLIC_IP}}'\n              source: \n                image:
+            gcr.io/blackjack-209019/argo/go-sofytesting:1.0.16\n              comparator:\n
+            \               type: string\n                criteria: notMatches\n                value:
+            FAIL\n  annotationCheck: \"false\"\n"
+    metadata:
+      labels:
+        weight: "10"
+    name: disk-fill
+    outputs: {}
+status:
+  finishedAt: null
+  startedAt: null
