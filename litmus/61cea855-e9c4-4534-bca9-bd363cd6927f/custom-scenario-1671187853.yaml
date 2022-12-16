@@ -1,0 +1,296 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 61dd221f-824e-4f36-acff-a28fa3f55724
+    subject: custom-scenario-1671187853_litmus
+    workflow_id: f107a11d-439c-49f8-975c-9e5ae355c32c
+    workflows.argoproj.io/controller-instanceid: 61dd221f-824e-4f36-acff-a28fa3f55724
+  name: custom-scenario-1671187853
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+    - name: TOTAL_CHAOS_DURATION
+      value: "300"
+    - name: TARGET_NODE
+      value: gke-hcllink-default-pool-7d131db4-bmo0
+    - name: DOMAIN
+      value: 34.150.250.209
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: node-drain-x54
+        template: node-drain-x54
+  - container:
+      args:
+      - kubectl apply -f /tmp/node-drain-x54.yaml -n {{workflow.parameters.adminModeNamespace}}
+        &&  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-drain-x54
+        path: /tmp/node-drain-x54.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Drain the node where application pod is scheduled
+            kind: ChaosExperiment
+            metadata:
+              name: node-drain
+              labels:
+                name: node-drain
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.12.0
+            spec:
+              definition:
+                scope: Cluster
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                      - pods/eviction
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                      - delete
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - nodes
+                    verbs:
+                      - get
+                      - list
+                      - patch
+                image: litmuschaos/go-runner:2.12.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name node-drain
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_NODE
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: LIB
+                    value: litmus
+                  - name: RAMP_TIME
+                    value: ""
+                labels:
+                  name: node-drain
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.12.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-node-drain-x54.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-drain-x54
+        path: /tmp/chaosengine-node-drain-x54.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            kind: ChaosEngine
+            metadata:
+              namespace: "{{workflow.parameters.adminModeNamespace}}"
+              generateName: node-drain-x54
+              labels:
+                workflow_run_id: "{{workflow.uid}}"
+            spec:
+              engineState: active
+              auxiliaryAppInfo: ""
+              chaosServiceAccount: litmus-admin
+              components:
+                runner:
+                  nodeSelector:
+                    chaos: "true"
+                  tolerations:
+                    - key: "chaos"
+                      operator: "Equal"
+                      value: "true"
+                      effect: "NoSchedule"
+              experiments:
+                - name: node-drain
+                  spec:
+                    components:
+                      nodeSelector:
+                        chaos: "true"
+                      tolerations:
+                        - key: "chaos"
+                          operator: "Equal"
+                          value: "true"
+                          effect: "NoSchedule"
+                      env:
+                        - name: TOTAL_CHAOS_DURATION
+                          value: "{{workflow.parameters.TOTAL_CHAOS_DURATION}}"
+                        - name: TARGET_NODE
+                          value: "{{workflow.parameters.TARGET_NODE}}"
+                    probe:
+                      - name: Bigfix-availability-start-probe
+                        type: httpProbe
+                        mode: SOT
+                        runProperties:
+                          probeTimeout: 20
+                          retry: 3
+                          interval: 20
+                          probePollingInterval: 1
+                        httpProbe/inputs:
+                          url: 'https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login'
+                          insecureSkipVerify: true
+                          responseTimeout: 5000
+                          method:
+                            get:
+                              criteria: '=='
+                              responseCode: '200'
+                      - name: Bigfix-availability-continuous-probe
+                        type: httpProbe
+                        mode: Continuous
+                        runProperties:
+                          probeTimeout: 30
+                          retry: 7
+                          interval: 30
+                          probePollingInterval: 1
+                        httpProbe/inputs:
+                          url: 'https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login'
+                          insecureSkipVerify: true
+                          responseTimeout: 5000
+                          method:
+                            get:
+                              criteria: '=='
+                              responseCode: '200'
+                      - name: Bigfix-availability-end-probe
+                        type: httpProbe
+                        mode: EOT
+                        runProperties:
+                          probeTimeout: 30
+                          retry: 5
+                          interval: 30
+                          probePollingInterval: 1
+                        httpProbe/inputs:
+                          url: 'https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login'
+                          insecureSkipVerify: true
+                          responseTimeout: 5000
+                          method:
+                            get:
+                              criteria: '=='
+                              responseCode: '200'
+              annotationCheck: "false"
+    metadata:
+      labels:
+        weight: "10"
+    name: node-drain-x54
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
