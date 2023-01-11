@@ -1,0 +1,306 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 61dd221f-824e-4f36-acff-a28fa3f55724
+    subject: custom-scenario-1673437410_litmus
+    workflow_id: f27a9927-61a3-492d-a71f-0add7055e27e
+    workflows.argoproj.io/controller-instanceid: 61dd221f-824e-4f36-acff-a28fa3f55724
+  name: custom-scenario-1673437410
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+    - name: APP_NAMESPACE
+      value: k1bigfix
+    - name: APP_LABEL
+      value: app.kubernetes.io/instance=k1bigfix
+    - name: APP_KIND
+      value: ""
+    - name: TOTAL_CHAOS_DURATION
+      value: "300"
+    - name: RESET_TIMEOUT
+      value: "30000"
+    - name: TARGET_SERVICE_PORT
+      value: "8083"
+    - name: TARGET_PODS
+      value: ""
+    - name: CONTAINER_RUNTIME
+      value: containerd
+    - name: SOCKET_PATH
+      value: /var/run/containerd/containerd.sock
+    - name: PODS_AFFECTED_PERC
+      value: "100"
+    - name: TOXICITY
+      value: "100"
+    - name: DOMAIN
+      value: 34.150.158.161
+  entrypoint: custom-chaos
+  nodeSelector:
+    chaos: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: pod-http-reset-peer-bm5
+        template: pod-http-reset-peer-bm5
+  - container:
+      args:
+      - kubectl apply -f /tmp/pod-http-reset-peer-bm5.yaml -n {{workflow.parameters.adminModeNamespace}}
+        &&  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-http-reset-peer-bm5
+        path: /tmp/pod-http-reset-peer-bm5.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: >
+                it injects chaos into the pod which stops outgoing http requests by
+                resetting the TCP connection and then reverts back to the original state
+                after a specified duration
+            kind: ChaosExperiment
+            metadata:
+              name: pod-http-reset-peer
+              labels:
+                name: pod-http-reset-peer
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.12.0
+            spec:
+              definition:
+                scope: Namespaced
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - apps
+                    resources:
+                      - deployments
+                      - statefulsets
+                      - replicasets
+                      - daemonsets
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - apps.openshift.io
+                    resources:
+                      - deploymentconfigs
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - replicationcontrollers
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - argoproj.io
+                    resources:
+                      - rollouts
+                    verbs:
+                      - list
+                      - get
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                image: litmuschaos/go-runner:2.12.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name pod-http-reset-peer
+                command:
+                  - /bin/bash
+                env:
+                  - name: TARGET_CONTAINER
+                    value: ""
+                  - name: LIB_IMAGE
+                    value: litmuschaos/go-runner:2.12.0
+                  - name: RESET_TIMEOUT
+                    value: "0"
+                  - name: TARGET_SERVICE_PORT
+                    value: "80"
+                  - name: PROXY_PORT
+                    value: "20000"
+                  - name: NETWORK_INTERFACE
+                    value: eth0
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: PODS_AFFECTED_PERC
+                    value: ""
+                  - name: TARGET_PODS
+                    value: ""
+                  - name: CONTAINER_RUNTIME
+                    value: docker
+                  - name: SOCKET_PATH
+                    value: /var/run/docker.sock
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: SEQUENCE
+                    value: parallel
+                labels:
+                  name: pod-http-reset-peer
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.12.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-pod-http-reset-peer-bm5.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: pod-http-reset-peer-bm5
+        path: /tmp/chaosengine-pod-http-reset-peer-bm5.yaml
+        raw:
+          data: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n
+            \ namespace: \"{{workflow.parameters.adminModeNamespace}}\"\n  generateName:
+            pod-http-reset-peer-bm5\n  labels:\n    workflow_run_id: \"{{workflow.uid}}\"\nspec:\n
+            \ engineState: active\n  appinfo:\n    appns: \"{{workflow.parameters.APP_NAMESPACE}}\"\n
+            \   applabel: \"{{workflow.parameters.APP_LABEL}}\"\n    appkind: \"{{workflow.parameters.APP_KIND}}\"\n
+            \ chaosServiceAccount: litmus-admin\n  components:\n    runner:\n      nodeSelector:\n
+            \       chaos: \"true\"\n      tolerations:\n        - key: \"chaos\"\n
+            \         operator: \"Equal\"\n          value: \"true\"\n          effect:
+            \"NoSchedule\"\n  experiments:\n    - name: pod-http-reset-peer\n      spec:\n
+            \       components:\n          nodeSelector:\n            chaos: \"true\"\n
+            \         tolerations:\n            - key: \"chaos\"\n              operator:
+            \"Equal\"\n              value: \"true\"\n              effect: \"NoSchedule\"\n
+            \         env:\n            - name: TOTAL_CHAOS_DURATION\n              value:
+            \"{{workflow.parameters.TOTAL_CHAOS_DURATION}}\"\n            - name:
+            RESET_TIMEOUT\n              value: \"{{workflow.parameters.RESET_TIMEOUT}}\"\n
+            \           - name: TARGET_SERVICE_PORT\n              value: \"{{workflow.parameters.TARGET_SERVICE_PORT}}\"\n
+            \           - name: TARGET_PODS\n              value: \"{{workflow.parameters.TARGET_PODS}}\"\n
+            \           - name: CONTAINER_RUNTIME\n              value: \"{{workflow.parameters.CONTAINER_RUNTIME}}\"\n
+            \           - name: SOCKET_PATH\n              value: \"{{workflow.parameters.SOCKET_PATH}}\"\n
+            \           - name: PODS_AFFECTED_PERC\n              value: \"{{workflow.parameters.PODS_AFFECTED_PERC}}\"\n
+            \           - name: TOXICITY\n              value: \"{{workflow.parameters.TOXICITY}}\"\n
+            \       probe:\n          - name: BIGFIX-Availability-start-probe\n            type:
+            httpProbe\n            mode: SOT\n            runProperties:\n              probeTimeout:
+            20\n              retry: 3\n              interval: 20\n              stopOnFailure:
+            false\n            httpProbe/inputs:\n              url: https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            ==\n                  responseCode: \"200\"\n          - name: BIGFIX-Availability-continuous-probe\n
+            \           type: httpProbe\n            mode: Continuous\n            runProperties:\n
+            \             probeTimeout: 30\n              retry: 7\n              interval:
+            30\n              stopOnFailure: false\n            httpProbe/inputs:\n
+            \             url: https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            ==\n                  responseCode: \"200\"\n          - name: BIGFIX-Availability-end-probe\n
+            \           type: httpProbe\n            mode: EOT\n            runProperties:\n
+            \             probeTimeout: 20\n              retry: 3\n              interval:
+            20\n              stopOnFailure: false\n            httpProbe/inputs:\n
+            \             url: https://bigfix-webreports-0.{{workflow.parameters.DOMAIN}}.nip.io/login\n
+            \             insecureSkipVerify: true\n              responseTimeout:
+            5000\n              method:\n                get:\n                  criteria:
+            ==\n                  responseCode: \"200\"\n  annotationCheck: \"false\"
+            \               \n"
+    metadata:
+      labels:
+        weight: "10"
+    name: pod-http-reset-peer-bm5
+    outputs: {}
+  tolerations:
+  - effect: NoSchedule
+    key: chaos
+    operator: Equal
+    value: "true"
+status:
+  finishedAt: null
+  startedAt: null
